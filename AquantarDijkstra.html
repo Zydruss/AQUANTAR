@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>AQUANTAR</title>
+    <style> 
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f4f8;
+        }
+
+        h1 {
+            color: #1565C0; 
+            margin-bottom: 4px;
+        }
+
+        p.sub {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .blok-grid {
+            display: grid;
+            grid-template-columns: repeat(5,1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .blok-btn {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .blok-btn.dipilih {
+            background: #E3F2FD;
+            border-color: #2196F3;
+            color: #1565C0;
+            font-weight: bold;
+        }
+
+        .blok-btn.depot {
+            background: #E8F5E9;
+            border-color: #4CAF50;
+            color: #2E7D32;
+            cursor: default;
+        }
+
+        button.cari {
+            padding: 12px 24px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        button.cari:hover { 
+            background: #1976D2;
+        }
+
+        .rute-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+        }
+
+        .rute-card strong {
+            color:#1565C0;
+        }
+
+        .rute-card .jarak {
+            display: inline-block;
+            background: #E8F5E9;
+            color: #2E7D32;
+            padding: 2px 10px;
+            border-radius: 99px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        .rute-path {
+            color: #555;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>AQUANTAR</h1>
+<p class="sub">Sistem pencarian rute terdekat untuk pengantaran galon - Kelompok 6 Informatika UNEJ 2026</p>
+
+<p><strong>Pilih blok tujuan hari ini:</strong></p>
+<div class="blok-grid" id="BlokGrid"></div>
+
+<button class="cari" onclick="CariRute()">Cari Rute Terpendek</button>
+
+<div id="hasil"></div>
+
+    <script>
+    const INF = 9999999;
+
+    const namaBlok = [
+        "Depot","Blok A","Blok B","Blok C","Blok D",
+        "Blok E","Blok F","Blok G","Blok H","Blok I","Blok J"
+    ];
+
+    const grafMakro = [
+     //  Depot   A      B      C      D      E      F      G      H      I      J
+        [0,     500,   INF,   INF,   800,   INF,   INF,   INF,   INF,   INF,   INF],  // Depot
+        [500,   0,     300,   INF,   INF,   700,   INF,   INF,   INF,   INF,   INF],  // A
+        [INF,   300,   0,     400,   INF,   INF,   600,   INF,   INF,   INF,   INF],  // B
+        [INF,   INF,   400,   0,     INF,   INF,   INF,   900,   INF,   INF,   INF],  // C
+        [800,   INF,   INF,   INF,   0,     200,   INF,   INF,   700,   INF,   INF],  // D
+        [INF,   700,   INF,   INF,   200,   0,     350,   INF,   INF,   800,   INF],  // E
+        [INF,   INF,   600,   INF,   INF,   350,   0,     250,   INF,   INF,   900],  // F    
+        [INF,   INF,   INF,   900,   INF,   INF,   250,   0,     INF,   INF,   400],  // G
+        [INF,   INF,   INF,   INF,   700,   INF,   INF,   INF,   0,     300,   INF],  // H   
+        [INF,   INF,   INF,   INF,   INF,   800,   INF,   INF,   300,   0,     500],  // I         
+        [INF,   INF,   INF,   INF,   INF,   INF,   900,   400,   INF,   500,   0  ]   // J
+    ];
+
+    // Bagian Dijkstra (ini mirip kek yang C++ tapi disesuaikan buat JS)
+        function dijkstra(graf, start) {
+            const n = graf.length;
+            const jarak = Array(n).fill(INF);
+            const prev = Array(n).fill(-1);
+            const dikunjungi = Array(n).fill(false);
+
+            jarak[start] = 0;
+
+            for (let langkah = 0; langkah < n; langkah++) {
+                // Cari node dengan jarak terkecil yang belum dikunjungi
+
+                let u = -1;
+                for (let i = 0; i < n; i++) {
+                    if (!dikunjungi[i] && (u === -1 || jarak[i] < jarak[u])) {
+                        u = i;
+                    }
+                }
+
+                if (jarak[u] === INF) break; // sisanya gak nyambung
+                
+                dikunjungi[u] = true;
+
+                // Update jarak ke tetangga
+                for (let v = 0; v < n; v++) {
+                    if (graf[u][v] !== INF && !dikunjungi[v]) {
+                        const baru = jarak[u] + graf[u][v];
+                        if (baru < jarak[v]) {
+                            jarak[v] = baru;
+                            prev[v] = u;
+                        }
+                    }
+                }
+                
+            }
+            return { jarak, prev }; //kembalikan keduanya
+        }
+
+    function rekonstruksi(prev, tujuan) {
+        const jalur = [];
+        let node = tujuan;  
+        while (node !== -1) {
+            jalur.push(node);
+            node = prev[node];
+        }
+        return jalur.reverse(); // balik urutan
+     }
+
+     // Bagian UI (ya UI ya UI dah intinya)
+     let blokDipilih = new Set();
+
+    function RenderBlok() {
+        const grid = document.getElementById("BlokGrid");
+        grid.innerHTML = '';
+        namaBlok.forEach((nama, i) => {
+            const btn = document.createElement('div');
+            if (i === 0) {
+                btn.className = 'blok-btn depot';
+                btn.textContent = 'Depot (start)';
+            } 
+            else {
+                btn.className = 'blok-btn' + (blokDipilih.has(i) ? ' dipilih' : '');
+                btn.textContent = nama;
+                btn.onclick = () => {
+                    if (blokDipilih.has(i)) blokDipilih.delete(i);
+                    else blokDipilih.add(i);
+                    RenderBlok();
+                };
+
+            }
+            grid.appendChild(btn);
+        });
+    }
+
+    // UI untuk tampilkan hasilnya
+    function CariRute() {
+        if (blokDipilih.size === 0) {
+            document.getElementById('hasil').innerHTML = '<p style="color: red;">Pilih minimal satu blok tujuan!</p>';
+            return;
+        }
+    
+        const { jarak, prev } = dijkstra(grafMakro, 0);
+        let html = '<p><strong>Hasil Rute Dari Depot:</strong></p>';
+
+        [...blokDipilih].sort((a,b) => a - b).forEach(t => {
+            if (jarak[t] === INF) {
+                html += `<div class="rute-card"><strong>${namaBlok[t]}</strong> - Tidak ada rute yang tersedia</div>`;
+            } 
+            else {
+                const jalur = rekonstruksi(prev, t);
+                const path = jalur.map(i => namaBlok[i]).join(' → ');
+                html += `
+                <div class="rute-card">
+                    <strong>→ ${namaBlok[t]}</strong>
+                    <span class="jarak">${jarak[t]} meter</span>
+                    <div class="rute-path">${path}</div>
+                </div>
+            `;
+           }
+        });
+
+        document.getElementById('hasil').innerHTML = html;
+    }
+
+    RenderBlok();
+    </script>
+
+</body>
+</html>
