@@ -1,0 +1,11 @@
+NamaKomplek,Dari,Ke,Jarak
+Blok A,Masuk Blok A,Pelanggan X,1
+Blok A,Masuk Blok A,Pelanggan Y,4
+Blok A,Masuk Blok A,Pelanggan Z,9999999
+Blok A,Pelanggan X,Pelanggan Y,2
+Blok A,Pelanggan X,Pelanggan Z,5
+Blok A,Pelanggan Y,Pelanggan Z,1
+Blok B,Masuk Blok B,Pelanggan P,2
+Blok B,Masuk Blok B,Pelanggan Q,6
+Blok B,Pelanggan P,Pelanggan Q,3
+Blok C,Masuk Blok C,Pelanggan R,3

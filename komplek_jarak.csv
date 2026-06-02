@@ -1,0 +1,6 @@
+Dari,Ke,Jarak
+Depot,Blok A,2
+Depot,Blok B,5
+Blok A,Blok B,3
+Blok A,Blok C,4
+Blok B,Blok C,1
