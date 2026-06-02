@@ -3,7 +3,6 @@
 #define _WIN32_WINNT 0x0600
 #define _WIN32_IE 0x0600
 
-#include <windows.h>
 #include <algorithm>
 #include <commctrl.h>
 #include <iostream>
@@ -11,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <windows.h>
 
 #include "Database.h"
 #include "Dijkstra.h"
@@ -581,6 +581,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
       HBRUSH hBtnBrush = brushCard;
       COLORREF txtColor = colorText;
+      bool needDeleteBrush = false; // Track if we created a temporary brush
 
       bool isActive = false;
       if (lpDrawItem->CtlID == ID_BTN_MENU_HOME && activePanel == PANEL_HOME)
@@ -605,26 +606,55 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         txtColor = RGB(255, 255, 255);
       } else if (isHovered) {
         hBtnBrush = CreateSolidBrush(RGB(51, 65, 85)); // Slate 700
+        needDeleteBrush = true;
       }
 
       // Special actions overrides
       if (lpDrawItem->CtlID == ID_BTN_GENERATE) {
-        hBtnBrush = (state & ODS_SELECTED)
-                        ? CreateSolidBrush(RGB(15, 118, 110))
-                        : (isHovered ? CreateSolidBrush(RGB(21, 128, 61))
-                                     : brushSuccess);
+        if (needDeleteBrush) {
+          DeleteObject(hBtnBrush);
+          needDeleteBrush = false;
+        }
+        if (state & ODS_SELECTED) {
+          hBtnBrush = CreateSolidBrush(RGB(15, 118, 110));
+          needDeleteBrush = true;
+        } else if (isHovered) {
+          hBtnBrush = CreateSolidBrush(RGB(21, 128, 61));
+          needDeleteBrush = true;
+        } else {
+          hBtnBrush = brushSuccess;
+        }
         txtColor = RGB(255, 255, 255);
       } else if (lpDrawItem->CtlID == ID_BTN_CRUD_DELETE) {
-        hBtnBrush = (state & ODS_SELECTED)
-                        ? CreateSolidBrush(RGB(185, 28, 28))
-                        : (isHovered ? CreateSolidBrush(RGB(153, 27, 27))
-                                     : brushDanger);
+        if (needDeleteBrush) {
+          DeleteObject(hBtnBrush);
+          needDeleteBrush = false;
+        }
+        if (state & ODS_SELECTED) {
+          hBtnBrush = CreateSolidBrush(RGB(185, 28, 28));
+          needDeleteBrush = true;
+        } else if (isHovered) {
+          hBtnBrush = CreateSolidBrush(RGB(153, 27, 27));
+          needDeleteBrush = true;
+        } else {
+          hBtnBrush = brushDanger;
+        }
         txtColor = RGB(255, 255, 255);
-      } else if (lpDrawItem->CtlID == ID_BTN_CRUD_ADD) {
-        hBtnBrush = (state & ODS_SELECTED)
-                        ? CreateSolidBrush(RGB(29, 78, 216))
-                        : (isHovered ? CreateSolidBrush(RGB(30, 64, 175))
-                                     : brushPrimary);
+      } else if (lpDrawItem->CtlID == ID_BTN_CRUD_ADD ||
+                 lpDrawItem->CtlID == ID_BTN_CRUD_SAVE) {
+        if (needDeleteBrush) {
+          DeleteObject(hBtnBrush);
+          needDeleteBrush = false;
+        }
+        if (state & ODS_SELECTED) {
+          hBtnBrush = CreateSolidBrush(RGB(29, 78, 216));
+          needDeleteBrush = true;
+        } else if (isHovered) {
+          hBtnBrush = CreateSolidBrush(RGB(30, 64, 175));
+          needDeleteBrush = true;
+        } else {
+          hBtnBrush = brushPrimary;
+        }
         txtColor = RGB(255, 255, 255);
       }
 
@@ -640,13 +670,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
       DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
       SelectObject(hdc, hOldFont);
 
-      if (!isActive && !(state & ODS_SELECTED) && isHovered) {
-        DeleteObject(hBtnBrush);
-      }
-      if ((lpDrawItem->CtlID == ID_BTN_GENERATE ||
-           lpDrawItem->CtlID == ID_BTN_CRUD_DELETE ||
-           lpDrawItem->CtlID == ID_BTN_CRUD_ADD) &&
-          (state & ODS_SELECTED || isHovered)) {
+      // Single cleanup point — only delete if we created a temporary brush
+      if (needDeleteBrush) {
         DeleteObject(hBtnBrush);
       }
 
@@ -846,33 +871,40 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     // Select Customer in CRUD Edit ListBox
     case IDC_CRUD_SELECT_PELANGGAN: {
       if (wmEvent == LBN_SELCHANGE) {
-        int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
-        if (selIdx != LB_ERR) {
-          wchar_t custW[256];
-          SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
-                       (LPARAM)custW);
-          string custName(wstring(custW).begin(), wstring(custW).end());
+        try {
+          int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
+          if (selIdx != LB_ERR) {
+            wchar_t custW[256];
+            SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
+                         (LPARAM)custW);
+            wstring wsCust(custW);
+            string custName(wsCust.begin(), wsCust.end());
 
-          int selCompIdx =
-              SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
-          if (selCompIdx != CB_ERR) {
-            wchar_t compW[128];
-            SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
-                         (LPARAM)compW);
-            string compName(wstring(compW).begin(), wstring(compW).end());
+            int selCompIdx =
+                SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
+            if (selCompIdx != CB_ERR) {
+              wchar_t compW[128];
+              SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
+                           (LPARAM)compW);
+              wstring wsComp(compW);
+              string compName(wsComp.begin(), wsComp.end());
 
-            int distToMasuk = AmbilJarakKeMasuk(custName, compName);
-            string distLainStr = AmbilJarakLainFormat(custName, compName);
+              int distToMasuk = AmbilJarakKeMasuk(custName, compName);
+              string distLainStr = AmbilJarakLainFormat(custName, compName);
 
-            wstring wCustName(custName.begin(), custName.end());
-            wstring wDistMasuk =
-                to_wstring_custom(distToMasuk == INF ? 9999999 : distToMasuk);
-            wstring wDistLain(distLainStr.begin(), distLainStr.end());
+              wstring wCustName(custName.begin(), custName.end());
+              wstring wDistMasuk =
+                  to_wstring_custom(distToMasuk == INF ? 9999999 : distToMasuk);
+              wstring wDistLain(distLainStr.begin(), distLainStr.end());
 
-            SetWindowTextW(hwndEditEditNama, wCustName.c_str());
-            SetWindowTextW(hwndEditEditJarakMasuk, wDistMasuk.c_str());
-            SetWindowTextW(hwndEditEditJarakLain, wDistLain.c_str());
+              SetWindowTextW(hwndEditEditNama, wCustName.c_str());
+              SetWindowTextW(hwndEditEditJarakMasuk, wDistMasuk.c_str());
+              SetWindowTextW(hwndEditEditJarakLain, wDistLain.c_str());
+            }
           }
+        } catch (...) {
+          MessageBoxW(hWnd, L"Gagal memuat data pelanggan.", L"Error",
+                      MB_ICONERROR);
         }
       }
     } break;
@@ -908,154 +940,188 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
     // CRUD: Tambah Pelanggan
     case ID_BTN_CRUD_ADD: {
-      wchar_t namaW[128], jarakMasukW[128], jarakLainW[512];
-      GetWindowTextW(hwndAddEditNama, namaW, 128);
-      GetWindowTextW(hwndAddEditJarakMasuk, jarakMasukW, 128);
-      GetWindowTextW(hwndAddEditJarakLain, jarakLainW, 512);
+      try {
+        wchar_t namaW[128], jarakMasukW[128], jarakLainW[512];
+        GetWindowTextW(hwndAddEditNama, namaW, 128);
+        GetWindowTextW(hwndAddEditJarakMasuk, jarakMasukW, 128);
+        GetWindowTextW(hwndAddEditJarakLain, jarakLainW, 512);
 
-      int selCompIdx = SendMessage(hwndAddComboKomplek, CB_GETCURSEL, 0, 0);
-      if (selCompIdx == CB_ERR) {
-        MessageBoxW(hWnd, L"Silakan pilih komplek/blok terlebih dahulu!",
-                    L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
+        int selCompIdx = SendMessage(hwndAddComboKomplek, CB_GETCURSEL, 0, 0);
+        if (selCompIdx == CB_ERR) {
+          MessageBoxW(hWnd, L"Silakan pilih komplek/blok terlebih dahulu!",
+                      L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
 
-      wchar_t compW[128];
-      SendMessageW(hwndAddComboKomplek, CB_GETLBTEXT, selCompIdx,
-                   (LPARAM)compW);
+        wchar_t compW[128];
+        SendMessageW(hwndAddComboKomplek, CB_GETLBTEXT, selCompIdx,
+                     (LPARAM)compW);
 
-      string name(wstring(namaW).begin(), wstring(namaW).end());
-      string compName(wstring(compW).begin(), wstring(compW).end());
-      int distMasuk = SafeStoi(
-          string(wstring(jarakMasukW).begin(), wstring(jarakMasukW).end()));
-      string otherDists(wstring(jarakLainW).begin(), wstring(jarakLainW).end());
+        wstring wsNama(namaW);
+        wstring wsComp(compW);
+        wstring wsJarakMasuk(jarakMasukW);
+        wstring wsJarakLain(jarakLainW);
 
-      if (name.empty()) {
-        MessageBoxW(hWnd, L"Nama pelanggan tidak boleh kosong!",
-                    L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
+        string name(wsNama.begin(), wsNama.end());
+        string compName(wsComp.begin(), wsComp.end());
+        int distMasuk =
+            SafeStoi(string(wsJarakMasuk.begin(), wsJarakMasuk.end()));
+        string otherDists(wsJarakLain.begin(), wsJarakLain.end());
 
-      map<string, int> otherDistMap = ParseJarakLain(otherDists);
+        if (name.empty()) {
+          MessageBoxW(hWnd, L"Nama pelanggan tidak boleh kosong!",
+                      L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
 
-      if (db.TambahPelanggan(name, compName, distMasuk, otherDistMap)) {
-        MessageBoxW(hWnd, L"Pelanggan berhasil ditambahkan!", L"Sukses",
-                    MB_ICONINFORMATION);
-        SetWindowTextW(hwndAddEditNama, L"");
-        SetWindowTextW(hwndAddEditJarakMasuk, L"");
-        SetWindowTextW(hwndAddEditJarakLain, L"");
-        ReloadAllUIs();
-      } else {
+        map<string, int> otherDistMap = ParseJarakLain(otherDists);
+
+        if (db.TambahPelanggan(name, compName, distMasuk, otherDistMap)) {
+          MessageBoxW(hWnd, L"Pelanggan berhasil ditambahkan!", L"Sukses",
+                      MB_ICONINFORMATION);
+          SetWindowTextW(hwndAddEditNama, L"");
+          SetWindowTextW(hwndAddEditJarakMasuk, L"");
+          SetWindowTextW(hwndAddEditJarakLain, L"");
+          ReloadAllUIs();
+        } else {
+          MessageBoxW(
+              hWnd,
+              L"Gagal menambahkan pelanggan. Nama mungkin duplikat atau "
+              L"tidak valid.",
+              L"Error", MB_ICONERROR);
+        }
+      } catch (...) {
         MessageBoxW(hWnd,
-                    L"Gagal menambahkan pelanggan. Nama mungkin duplikat atau "
-                    L"tidak valid.",
+                    L"Terjadi kesalahan internal saat menambah pelanggan.",
                     L"Error", MB_ICONERROR);
       }
     } break;
 
     // CRUD: Simpan Perubahan Edit
     case ID_BTN_CRUD_SAVE: {
-      int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
-      if (selIdx == LB_ERR) {
-        MessageBoxW(
-            hWnd, L"Silakan pilih pelanggan yang ingin diedit di daftar atas!",
-            L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
+      try {
+        int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
+        if (selIdx == LB_ERR) {
+          MessageBoxW(
+              hWnd,
+              L"Silakan pilih pelanggan yang ingin diedit di daftar atas!",
+              L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
 
-      wchar_t originalW[256];
-      SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
-                   (LPARAM)originalW);
-      string oldName(wstring(originalW).begin(), wstring(originalW).end());
+        wchar_t originalW[256];
+        SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
+                     (LPARAM)originalW);
+        wstring wsOldName(originalW);
+        string oldName(wsOldName.begin(), wsOldName.end());
 
-      int selCompIdx = SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
-      if (selCompIdx == CB_ERR) {
-        MessageBoxW(hWnd, L"Silakan pilih komplek terlebih dahulu!",
-                    L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
-      wchar_t compW[128];
-      SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
-                   (LPARAM)compW);
-      string compName(wstring(compW).begin(), wstring(compW).end());
+        int selCompIdx = SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
+        if (selCompIdx == CB_ERR) {
+          MessageBoxW(hWnd, L"Silakan pilih komplek terlebih dahulu!",
+                      L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
+        wchar_t compW[128];
+        SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
+                     (LPARAM)compW);
+        wstring wsComp(compW);
+        string compName(wsComp.begin(), wsComp.end());
 
-      wchar_t newNamaW[128], jarakMasukW[128], jarakLainW[512];
-      GetWindowTextW(hwndEditEditNama, newNamaW, 128);
-      GetWindowTextW(hwndEditEditJarakMasuk, jarakMasukW, 128);
-      GetWindowTextW(hwndEditEditJarakLain, jarakLainW, 512);
+        wchar_t newNamaW[128], jarakMasukW[128], jarakLainW[512];
+        GetWindowTextW(hwndEditEditNama, newNamaW, 128);
+        GetWindowTextW(hwndEditEditJarakMasuk, jarakMasukW, 128);
+        GetWindowTextW(hwndEditEditJarakLain, jarakLainW, 512);
 
-      string newName(wstring(newNamaW).begin(), wstring(newNamaW).end());
-      int distMasuk = SafeStoi(
-          string(wstring(jarakMasukW).begin(), wstring(jarakMasukW).end()));
-      string otherDists(wstring(jarakLainW).begin(), wstring(jarakLainW).end());
+        wstring wsNewName(newNamaW);
+        wstring wsJarakMasuk(jarakMasukW);
+        wstring wsJarakLain(jarakLainW);
 
-      if (newName.empty()) {
-        MessageBoxW(hWnd, L"Nama pelanggan baru tidak boleh kosong!",
-                    L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
+        string newName(wsNewName.begin(), wsNewName.end());
+        int distMasuk =
+            SafeStoi(string(wsJarakMasuk.begin(), wsJarakMasuk.end()));
+        string otherDists(wsJarakLain.begin(), wsJarakLain.end());
 
-      map<string, int> otherDistMap = ParseJarakLain(otherDists);
+        if (newName.empty()) {
+          MessageBoxW(hWnd, L"Nama pelanggan baru tidak boleh kosong!",
+                      L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
 
-      if (db.EditPelanggan(oldName, newName, compName, distMasuk,
-                           otherDistMap)) {
-        MessageBoxW(hWnd, L"Informasi pelanggan berhasil diubah!", L"Sukses",
-                    MB_ICONINFORMATION);
-        SetWindowTextW(hwndEditEditNama, L"");
-        SetWindowTextW(hwndEditEditJarakMasuk, L"");
-        SetWindowTextW(hwndEditEditJarakLain, L"");
-        ReloadAllUIs();
-      } else {
-        MessageBoxW(hWnd,
-                    L"Gagal menyimpan perubahan. Nama baru mungkin duplikat "
-                    L"atau tidak valid.",
-                    L"Error", MB_ICONERROR);
-      }
-    } break;
+        map<string, int> otherDistMap = ParseJarakLain(otherDists);
 
-    // CRUD: Hapus Pelanggan
-    case ID_BTN_CRUD_DELETE: {
-      int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
-      if (selIdx == LB_ERR) {
-        MessageBoxW(
-            hWnd, L"Silakan pilih pelanggan yang ingin dihapus di daftar atas!",
-            L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
-
-      wchar_t originalW[256];
-      SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
-                   (LPARAM)originalW);
-      string name(wstring(originalW).begin(), wstring(originalW).end());
-
-      int selCompIdx = SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
-      if (selCompIdx == CB_ERR) {
-        MessageBoxW(hWnd, L"Silakan pilih komplek terlebih dahulu!",
-                    L"Input Invalid", MB_ICONWARNING);
-        break;
-      }
-      wchar_t compW[128];
-      SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
-                   (LPARAM)compW);
-      string compName(wstring(compW).begin(), wstring(compW).end());
-
-      wstring confirmMsg = L"Apakah Anda yakin ingin menghapus pelanggan \"" +
-                           wstring(name.begin(), name.end()) + L"\" di " +
-                           wstring(compName.begin(), compName.end()) + L"?";
-      int confirm = MessageBoxW(hWnd, confirmMsg.c_str(), L"Konfirmasi Hapus",
-                                MB_YESNO | MB_ICONWARNING);
-      if (confirm == IDYES) {
-        if (db.HapusPelanggan(name, compName)) {
-          MessageBoxW(hWnd, L"Pelanggan berhasil dihapus!", L"Sukses",
+        if (db.EditPelanggan(oldName, newName, compName, distMasuk,
+                             otherDistMap)) {
+          MessageBoxW(hWnd, L"Informasi pelanggan berhasil diubah!", L"Sukses",
                       MB_ICONINFORMATION);
           SetWindowTextW(hwndEditEditNama, L"");
           SetWindowTextW(hwndEditEditJarakMasuk, L"");
           SetWindowTextW(hwndEditEditJarakLain, L"");
           ReloadAllUIs();
         } else {
-          MessageBoxW(hWnd, L"Gagal menghapus pelanggan.", L"Error",
-                      MB_ICONERROR);
+          MessageBoxW(hWnd,
+                      L"Gagal menyimpan perubahan. Nama baru mungkin duplikat "
+                      L"atau tidak valid.",
+                      L"Error", MB_ICONERROR);
         }
+      } catch (...) {
+        MessageBoxW(hWnd,
+                    L"Terjadi kesalahan internal saat menyimpan perubahan.",
+                    L"Error", MB_ICONERROR);
+      }
+    } break;
+
+    // CRUD: Hapus Pelanggan
+    case ID_BTN_CRUD_DELETE: {
+      try {
+        int selIdx = SendMessage(hwndEditListPelanggan, LB_GETCURSEL, 0, 0);
+        if (selIdx == LB_ERR) {
+          MessageBoxW(
+              hWnd,
+              L"Silakan pilih pelanggan yang ingin dihapus di daftar atas!",
+              L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
+
+        wchar_t originalW[256];
+        SendMessageW(hwndEditListPelanggan, LB_GETTEXT, selIdx,
+                     (LPARAM)originalW);
+        wstring wsName(originalW);
+        string name(wsName.begin(), wsName.end());
+
+        int selCompIdx = SendMessage(hwndEditComboKomplek, CB_GETCURSEL, 0, 0);
+        if (selCompIdx == CB_ERR) {
+          MessageBoxW(hWnd, L"Silakan pilih komplek terlebih dahulu!",
+                      L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
+        wchar_t compW[128];
+        SendMessageW(hwndEditComboKomplek, CB_GETLBTEXT, selCompIdx,
+                     (LPARAM)compW);
+        wstring wsComp(compW);
+        string compName(wsComp.begin(), wsComp.end());
+
+        wstring confirmMsg = L"Apakah Anda yakin ingin menghapus pelanggan \"" +
+                             wstring(name.begin(), name.end()) + L"\" di " +
+                             wstring(compName.begin(), compName.end()) + L"?";
+        int confirm = MessageBoxW(hWnd, confirmMsg.c_str(), L"Konfirmasi Hapus",
+                                  MB_YESNO | MB_ICONWARNING);
+        if (confirm == IDYES) {
+          if (db.HapusPelanggan(name, compName)) {
+            MessageBoxW(hWnd, L"Pelanggan berhasil dihapus!", L"Sukses",
+                        MB_ICONINFORMATION);
+            SetWindowTextW(hwndEditEditNama, L"");
+            SetWindowTextW(hwndEditEditJarakMasuk, L"");
+            SetWindowTextW(hwndEditEditJarakLain, L"");
+            ReloadAllUIs();
+          } else {
+            MessageBoxW(hWnd, L"Gagal menghapus pelanggan.", L"Error",
+                        MB_ICONERROR);
+          }
+        }
+      } catch (...) {
+        MessageBoxW(hWnd,
+                    L"Terjadi kesalahan internal saat menghapus pelanggan.",
+                    L"Error", MB_ICONERROR);
       }
     } break;
     }
