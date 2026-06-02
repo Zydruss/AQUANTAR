@@ -38,4 +38,24 @@ void DijkstraMikro(
     const std::vector<int>& PelangganTujuan
 );
 
+// GUI Routing Structures and Functions
+struct RuteHasil {
+    std::vector<int> RuteNode;                  // Urutan node penting yang dikunjungi
+    int TotalJarak;                             // Total jarak perjalanan
+    std::vector<std::vector<int>> DetailJalur;  // Detail rute per segmen (jalur lengkap dari Dijkstra)
+};
+
+// Hitung rute terpendek yang mengunjungi semua target (menggunakan Nearest-Neighbor heuristik)
+RuteHasil HitungRuteMakro(
+    const std::vector<std::vector<int>>& GrafMakro,
+    int StartBlok,
+    const std::vector<int>& BlokTujuan
+);
+
+RuteHasil HitungRuteMikro(
+    const std::vector<std::vector<int>>& GrafMikro,
+    int StartPelanggan,
+    const std::vector<int>& PelangganTujuan
+);
+
 #endif

@@ -207,3 +207,194 @@ void DijkstraMikro(
     cout << "\n Total Jarak: " << Jarak[Tujuan] << " meter" << endl;
     }
 }
+
+// Helper untuk menjalankan Dijkstra dan mengembalikan Jarak serta Prev
+pair<vector<int>, vector<int>> DijkstraDetail(const vector<vector<int>>& Graf, int Start) {
+    int N = Graf.size();
+    vector<int> Jarak(N, INF);
+    vector<int> Prev(N, -1);
+    vector<bool> Dikunjungi(N, false);
+    
+    Jarak[Start] = 0;
+    
+    for (int Langkah = 0; Langkah < N; Langkah++) {
+        int NodeTerdekat = -1;
+        for (int i = 0; i < N; i++) {
+            if (!Dikunjungi[i]) {
+                if (NodeTerdekat == -1 || Jarak[i] < Jarak[NodeTerdekat]) {
+                    NodeTerdekat = i;
+                }
+            }
+        }
+        
+        if (NodeTerdekat == -1 || Jarak[NodeTerdekat] == INF) break;
+        Dikunjungi[NodeTerdekat] = true;
+        
+        for (int Tetangga = 0; Tetangga < N; Tetangga++) {
+            if (Graf[NodeTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
+                int JarakBaru = Jarak[NodeTerdekat] + Graf[NodeTerdekat][Tetangga];
+                if (JarakBaru < Jarak[Tetangga]) {
+                    Jarak[Tetangga] = JarakBaru;
+                    Prev[Tetangga] = NodeTerdekat;
+                }
+            }
+        }
+    }
+    return {Jarak, Prev};
+}
+
+// Algoritma Nearest-Neighbor TSP untuk Makro
+RuteHasil HitungRuteMakro(
+    const vector<vector<int>>& GrafMakro,
+    int StartBlok,
+    const vector<int>& BlokTujuan
+) {
+    RuteHasil Hasil;
+    Hasil.TotalJarak = 0;
+    
+    if (BlokTujuan.empty()) {
+        Hasil.RuteNode.push_back(StartBlok);
+        return Hasil;
+    }
+    
+    vector<int> BelumDikunjungi = BlokTujuan;
+    int NodeSekarang = StartBlok;
+    Hasil.RuteNode.push_back(StartBlok);
+    
+    while (!BelumDikunjungi.empty()) {
+        auto detail = DijkstraDetail(GrafMakro, NodeSekarang);
+        const vector<int>& Jarak = detail.first;
+        const vector<int>& Prev = detail.second;
+        
+        int IndeksTerdekat = -1;
+        int JarakTerdekat = INF;
+        
+        for (int i = 0; i < BelumDikunjungi.size(); i++) {
+            int Target = BelumDikunjungi[i];
+            if (Jarak[Target] < JarakTerdekat) {
+                JarakTerdekat = Jarak[Target];
+                IndeksTerdekat = i;
+            }
+        }
+        
+        // Jika tidak ada target yang bisa dijangkau
+        if (IndeksTerdekat == -1 || JarakTerdekat == INF) break;
+        
+        int TargetTerdekat = BelumDikunjungi[IndeksTerdekat];
+        
+        // Rekonstruksi Jalur segmen ini
+        vector<int> SegmenJalur;
+        int TempNode = TargetTerdekat;
+        while (TempNode != -1) {
+            SegmenJalur.push_back(TempNode);
+            TempNode = Prev[TempNode];
+        }
+        reverse(SegmenJalur.begin(), SegmenJalur.end());
+        
+        Hasil.DetailJalur.push_back(SegmenJalur);
+        Hasil.TotalJarak += JarakTerdekat;
+        Hasil.RuteNode.push_back(TargetTerdekat);
+        
+        NodeSekarang = TargetTerdekat;
+        BelumDikunjungi.erase(BelumDikunjungi.begin() + IndeksTerdekat);
+    }
+    
+    // Kembali ke Depot (StartBlok)
+    if (NodeSekarang != StartBlok) {
+        auto detail = DijkstraDetail(GrafMakro, NodeSekarang);
+        const vector<int>& Jarak = detail.first;
+        const vector<int>& Prev = detail.second;
+        if (Jarak[StartBlok] != INF) {
+            vector<int> SegmenJalur;
+            int TempNode = StartBlok;
+            while (TempNode != -1) {
+                SegmenJalur.push_back(TempNode);
+                TempNode = Prev[TempNode];
+            }
+            reverse(SegmenJalur.begin(), SegmenJalur.end());
+            
+            Hasil.DetailJalur.push_back(SegmenJalur);
+            Hasil.TotalJarak += Jarak[StartBlok];
+            Hasil.RuteNode.push_back(StartBlok);
+        }
+    }
+    
+    return Hasil;
+}
+
+// Algoritma Nearest-Neighbor TSP untuk Mikro
+RuteHasil HitungRuteMikro(
+    const vector<vector<int>>& GrafMikro,
+    int StartPelanggan,
+    const vector<int>& PelangganTujuan
+) {
+    RuteHasil Hasil;
+    Hasil.TotalJarak = 0;
+    
+    if (PelangganTujuan.empty()) {
+        Hasil.RuteNode.push_back(StartPelanggan);
+        return Hasil;
+    }
+    
+    vector<int> BelumDikunjungi = PelangganTujuan;
+    int NodeSekarang = StartPelanggan;
+    Hasil.RuteNode.push_back(StartPelanggan);
+    
+    while (!BelumDikunjungi.empty()) {
+        auto detail = DijkstraDetail(GrafMikro, NodeSekarang);
+        const vector<int>& Jarak = detail.first;
+        const vector<int>& Prev = detail.second;
+        
+        int IndeksTerdekat = -1;
+        int JarakTerdekat = INF;
+        
+        for (int i = 0; i < BelumDikunjungi.size(); i++) {
+            int Target = BelumDikunjungi[i];
+            if (Jarak[Target] < JarakTerdekat) {
+                JarakTerdekat = Jarak[Target];
+                IndeksTerdekat = i;
+            }
+        }
+        
+        if (IndeksTerdekat == -1 || JarakTerdekat == INF) break;
+        
+        int TargetTerdekat = BelumDikunjungi[IndeksTerdekat];
+        
+        vector<int> SegmenJalur;
+        int TempNode = TargetTerdekat;
+        while (TempNode != -1) {
+            SegmenJalur.push_back(TempNode);
+            TempNode = Prev[TempNode];
+        }
+        reverse(SegmenJalur.begin(), SegmenJalur.end());
+        
+        Hasil.DetailJalur.push_back(SegmenJalur);
+        Hasil.TotalJarak += JarakTerdekat;
+        Hasil.RuteNode.push_back(TargetTerdekat);
+        
+        NodeSekarang = TargetTerdekat;
+        BelumDikunjungi.erase(BelumDikunjungi.begin() + IndeksTerdekat);
+    }
+    
+    // Kembali ke Masuk Blok (StartPelanggan)
+    if (NodeSekarang != StartPelanggan) {
+        auto detail = DijkstraDetail(GrafMikro, NodeSekarang);
+        const vector<int>& Jarak = detail.first;
+        const vector<int>& Prev = detail.second;
+        if (Jarak[StartPelanggan] != INF) {
+            vector<int> SegmenJalur;
+            int TempNode = StartPelanggan;
+            while (TempNode != -1) {
+                SegmenJalur.push_back(TempNode);
+                TempNode = Prev[TempNode];
+            }
+            reverse(SegmenJalur.begin(), SegmenJalur.end());
+            
+            Hasil.DetailJalur.push_back(SegmenJalur);
+            Hasil.TotalJarak += Jarak[StartPelanggan];
+            Hasil.RuteNode.push_back(StartPelanggan);
+        }
+    }
+    
+    return Hasil;
+}
