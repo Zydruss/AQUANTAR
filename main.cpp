@@ -3,6 +3,7 @@
 #define _WIN32_WINNT 0x0600
 #define _WIN32_IE 0x0600
 
+#include <windows.h>
 #include <algorithm>
 #include <commctrl.h>
 #include <iostream>
@@ -10,7 +11,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <windows.h>
 
 #include "Database.h"
 #include "Dijkstra.h"
@@ -44,6 +44,7 @@ static int SafeStoi(const string &s, int defVal = 9999999) {
 #define ID_BTN_MENU_RUTE 103
 #define ID_BTN_MENU_CRUD 104
 #define ID_BTN_MENU_EXIT 105
+#define ID_BTN_MENU_CRUD_KOMPLEK 106
 
 #define IDC_SEARCH_KOMPLEK 201
 #define IDC_LIST_KOMPLEK 202
@@ -72,14 +73,24 @@ static int SafeStoi(const string &s, int defVal = 9999999) {
 #define IDC_CRUD_EDIT_KOMPLEK 412
 #define ID_BTN_CRUD_BACK 413
 
-// Panels Enum
-enum ActivePanel { PANEL_HOME, PANEL_KOMPLEK, PANEL_RUTE, PANEL_CRUD };
+#define IDC_COMP_ADD_NAMA 501
+#define IDC_COMP_ADD_JARAK 502
+#define ID_BTN_COMP_ADD 503
+#define IDC_COMP_SELECT 504
+#define IDC_COMP_EDIT_NAMA 505
+#define IDC_COMP_EDIT_JARAK 506
+#define ID_BTN_COMP_SAVE 507
+#define ID_BTN_COMP_DELETE 508
+#define ID_BTN_COMP_BACK 509
 
-// Global Variables
+// Enum untuk panel aktif di aplikasi
+enum ActivePanel { PANEL_HOME, PANEL_KOMPLEK, PANEL_RUTE, PANEL_CRUD, PANEL_CRUD_KOMPLEK };
+
+// Variabel Global
 Database db;
 ActivePanel activePanel = PANEL_HOME;
 
-// Modern slate dark theme palette
+// Palet warna modern (Slate dark theme)
 COLORREF colorBg = RGB(15, 23, 42);             // Slate 900
 COLORREF colorSidebar = RGB(2, 6, 23);          // Slate 950
 COLORREF colorCard = RGB(30, 41, 59);           // Slate 800
@@ -101,30 +112,31 @@ HFONT hFontMain;
 HFONT hFontBold;
 HFONT hFontTitle;
 
-// Window Handles
+// Window Handles Utama
 HWND hwndMain;
 HWND hwndSidebarTitle, hwndSidebarSubtitle;
-HWND hwndMenuHome, hwndMenuKomplek, hwndMenuRute, hwndMenuCrud, hwndMenuExit;
+HWND hwndMenuHome, hwndMenuKomplek, hwndMenuRute, hwndMenuCrud, hwndMenuCrudKomplek, hwndMenuExit;
 
-// Panel control vectors (for showing/hiding groups)
+// Vektor penampung kontrol panel untuk manajemen Show/Hide
 vector<HWND> hwndHomeCtrls;
 vector<HWND> hwndKomplekCtrls;
 vector<HWND> hwndRuteCtrls;
 vector<HWND> hwndCrudCtrls;
+vector<HWND> hwndCompCrudCtrls;
 
-// Home panel controls
+// Kontrol untuk Panel Home
 HWND hwndHomeTitle, hwndHomeDesc;
 HWND hwndHomeCard1, hwndHomeCard2;
 
-// Komplek panel controls
+// Kontrol untuk Panel Informasi Komplek
 HWND hwndKomplekTitle, hwndSearchLabel, hwndSearchEdit, hwndKomplekList,
     hwndCustListTitle, hwndCustDetailList, hwndBtnKomplekBack;
 
-// Rute panel controls
+// Kontrol untuk Panel Perencanaan Rute
 HWND hwndRuteTitle, hwndSelectLabel, hwndCustChecklist, hwndBtnSelectAll,
     hwndBtnReset, hwndBtnGenerate, hwndResultOutput, hwndBtnRuteBack;
 
-// CRUD panel controls
+// Kontrol untuk Panel CRUD Pelanggan
 HWND hwndCrudTitle, hwndAddSectionTitle, hwndAddLabelNama, hwndAddEditNama,
     hwndAddLabelKomplek, hwndAddComboKomplek;
 HWND hwndAddLabelJarakMasuk, hwndAddEditJarakMasuk, hwndAddLabelJarakLain,
@@ -135,15 +147,25 @@ HWND hwndEditSectionTitle, hwndEditLabelKomplek, hwndEditComboKomplek,
 HWND hwndEditLabelJarakMasuk, hwndEditEditJarakMasuk, hwndEditLabelJarakLain,
     hwndEditEditJarakLain, hwndBtnSave, hwndBtnDelete, hwndBtnCrudBack;
 
-// Helper prototypes
+// Kontrol untuk Panel CRUD Komplek
+HWND hwndCompCrudTitle;
+HWND hwndCompAddSectionTitle, hwndCompAddLabelNama, hwndCompAddEditNama;
+HWND hwndCompAddLabelJarak, hwndCompAddEditJarak, hwndCompBtnAdd;
+HWND hwndCompEditSectionTitle, hwndCompEditLabelSelect, hwndCompEditList;
+HWND hwndCompEditLabelNama, hwndCompEditEditNama, hwndCompEditLabelJarak, hwndCompEditEditJarak;
+HWND hwndCompBtnSave, hwndCompBtnDelete, hwndCompBtnBack;
+
+// Deklarasi prototipe fungsi helper
 void SwitchPanel(ActivePanel panel);
 void ReloadAllUIs();
 void GenerateDeliveryRoute();
 string AmbilJarakLainFormat(const string &nama, const string &komplek);
+string AmbilJarakKomplekLainFormat(const string &nama);
 map<string, int> ParseJarakLain(const string &input);
 int AmbilJarakKeMasuk(const string &nama, const string &komplek);
 
-// Subclass Proc for hover states
+// Prosedur Subclass Tombol untuk menangani efek visual hover (saat kursor mouse berada di atas tombol)
+// Fungsi ini menangkap pergerakan mouse masuk/keluar dari tombol dan memicu proses repaint
 LRESULT CALLBACK ButtonSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam,
                                     LPARAM lParam, UINT_PTR uIdSubclass,
                                     DWORD_PTR dwRefData) {
@@ -153,8 +175,9 @@ LRESULT CALLBACK ButtonSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     tme.cbSize = sizeof(TRACKMOUSEEVENT);
     tme.dwFlags = TME_LEAVE;
     tme.hwndTrack = hWnd;
-    TrackMouseEvent(&tme);
+    TrackMouseEvent(&tme); // Lacak event mouse keluar (mouse leave)
 
+    // Jika properti HOVER belum diset, set propertinya lalu gambar ulang tombol
     if (!GetPropW(hWnd, L"HOVER")) {
       SetPropW(hWnd, L"HOVER", (HANDLE)1);
       InvalidateRect(hWnd, NULL, FALSE);
@@ -162,6 +185,7 @@ LRESULT CALLBACK ButtonSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     break;
   }
   case WM_MOUSELEAVE: {
+    // Hapus properti HOVER saat mouse keluar dan gambar ulang tombol ke keadaan normal
     RemovePropW(hWnd, L"HOVER");
     InvalidateRect(hWnd, NULL, FALSE);
     break;
@@ -205,6 +229,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     hwndMenuCrud = CreateWindowExW(
         0, L"BUTTON", L"Kelola Pelanggan", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         10, 260, 200, 40, hWnd, (HMENU)ID_BTN_MENU_CRUD, NULL, NULL);
+    hwndMenuCrudKomplek = CreateWindowExW(
+        0, L"BUTTON", L"Kelola Komplek", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        10, 310, 200, 40, hWnd, (HMENU)ID_BTN_MENU_CRUD_KOMPLEK, NULL, NULL);
     hwndMenuExit = CreateWindowExW(
         0, L"BUTTON", L"Keluar", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 10, 600,
         200, 40, hWnd, (HMENU)ID_BTN_MENU_EXIT, NULL, NULL);
@@ -213,6 +240,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     SetWindowSubclass(hwndMenuKomplek, ButtonSubclassProc, 0, 0);
     SetWindowSubclass(hwndMenuRute, ButtonSubclassProc, 0, 0);
     SetWindowSubclass(hwndMenuCrud, ButtonSubclassProc, 0, 0);
+    SetWindowSubclass(hwndMenuCrudKomplek, ButtonSubclassProc, 0, 0);
     SetWindowSubclass(hwndMenuExit, ButtonSubclassProc, 0, 0);
 
     // ---- PANEL 1: HOME ----
@@ -504,6 +532,111 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     SetWindowSubclass(hwndBtnCrudBack, ButtonSubclassProc, 0, 0);
     hwndCrudCtrls.push_back(hwndBtnCrudBack);
 
+    // ---- PANEL 5: CRUD KOMPLEK ----
+    hwndCompCrudTitle = CreateWindowExW(0, L"STATIC", L"Kelola Database Komplek",
+                                    WS_CHILD | SS_LEFT, 240, 25, 720, 35, hWnd,
+                                    NULL, NULL, NULL);
+    SetCtrlFont(hwndCompCrudTitle, hFontTitle);
+    hwndCompCrudCtrls.push_back(hwndCompCrudTitle);
+
+    // LEFT SIDE: TAMBAH KOMPLEK BARU
+    hwndCompAddSectionTitle = CreateWindowExW(
+        0, L"STATIC", L"Tambah Komplek Baru", WS_CHILD | SS_LEFT, 240, 80,
+        300, 25, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompAddSectionTitle, hFontBold);
+    hwndCompCrudCtrls.push_back(hwndCompAddSectionTitle);
+
+    hwndCompAddLabelNama =
+        CreateWindowExW(0, L"STATIC", L"Nama Komplek:", WS_CHILD | SS_LEFT,
+                        240, 115, 300, 20, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompAddLabelNama, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompAddLabelNama);
+
+    hwndCompAddEditNama = CreateWindowExW(
+        0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_LEFT, 240, 135, 300, 25,
+        hWnd, (HMENU)IDC_COMP_ADD_NAMA, NULL, NULL);
+    SetCtrlFont(hwndCompAddEditNama, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompAddEditNama);
+
+    hwndCompAddLabelJarak = CreateWindowExW(
+        0, L"STATIC", L"Jarak ke Komplek Lain (Nama:Jarak, ...):",
+        WS_CHILD | SS_LEFT, 240, 175, 300, 20, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompAddLabelJarak, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompAddLabelJarak);
+
+    hwndCompAddEditJarak = CreateWindowExW(
+        0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_LEFT, 240, 195, 300, 25,
+        hWnd, (HMENU)IDC_COMP_ADD_JARAK, NULL, NULL);
+    SetCtrlFont(hwndCompAddEditJarak, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompAddEditJarak);
+
+    hwndCompBtnAdd = CreateWindowExW(0, L"BUTTON", L"Tambah Komplek",
+                                 WS_CHILD | BS_OWNERDRAW, 240, 245, 300, 38,
+                                 hWnd, (HMENU)ID_BTN_COMP_ADD, NULL, NULL);
+    SetWindowSubclass(hwndCompBtnAdd, ButtonSubclassProc, 0, 0);
+    hwndCompCrudCtrls.push_back(hwndCompBtnAdd);
+
+    // RIGHT SIDE: EDIT & HAPUS KOMPLEK
+    hwndCompEditSectionTitle = CreateWindowExW(
+        0, L"STATIC", L"Edit / Hapus Komplek", WS_CHILD | SS_LEFT, 580, 80,
+        380, 25, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompEditSectionTitle, hFontBold);
+    hwndCompCrudCtrls.push_back(hwndCompEditSectionTitle);
+
+    hwndCompEditLabelSelect =
+        CreateWindowExW(0, L"STATIC", L"Pilih Komplek:", WS_CHILD | SS_LEFT,
+                        580, 110, 380, 20, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompEditLabelSelect, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditLabelSelect);
+
+    hwndCompEditList = CreateWindowExW(
+        0, L"LISTBOX", L"", WS_CHILD | WS_BORDER | WS_VSCROLL | LBS_NOTIFY, 580,
+        130, 380, 150, hWnd, (HMENU)IDC_COMP_SELECT, NULL, NULL);
+    SetCtrlFont(hwndCompEditList, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditList);
+
+    hwndCompEditLabelNama = CreateWindowExW(0, L"STATIC", L"Nama Komplek (Baru):",
+                                        WS_CHILD | SS_LEFT, 580, 295, 380, 20,
+                                        hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompEditLabelNama, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditLabelNama);
+
+    hwndCompEditEditNama = CreateWindowExW(
+        0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_LEFT, 580, 315, 380, 25,
+        hWnd, (HMENU)IDC_COMP_EDIT_NAMA, NULL, NULL);
+    SetCtrlFont(hwndCompEditEditNama, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditEditNama);
+
+    hwndCompEditLabelJarak = CreateWindowExW(
+        0, L"STATIC", L"Jarak ke Komplek Lain (Nama:Jarak, ...):",
+        WS_CHILD | SS_LEFT, 580, 350, 380, 20, hWnd, NULL, NULL, NULL);
+    SetCtrlFont(hwndCompEditLabelJarak, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditLabelJarak);
+
+    hwndCompEditEditJarak = CreateWindowExW(
+        0, L"EDIT", L"", WS_CHILD | WS_BORDER | ES_LEFT, 580, 370, 380, 25,
+        hWnd, (HMENU)IDC_COMP_EDIT_JARAK, NULL, NULL);
+    SetCtrlFont(hwndCompEditEditJarak, hFontMain);
+    hwndCompCrudCtrls.push_back(hwndCompEditEditJarak);
+
+    hwndCompBtnSave = CreateWindowExW(0, L"BUTTON", L"Simpan Perubahan",
+                                  WS_CHILD | BS_OWNERDRAW, 580, 420, 180, 38,
+                                  hWnd, (HMENU)ID_BTN_COMP_SAVE, NULL, NULL);
+    SetWindowSubclass(hwndCompBtnSave, ButtonSubclassProc, 0, 0);
+    hwndCompCrudCtrls.push_back(hwndCompBtnSave);
+
+    hwndCompBtnDelete = CreateWindowExW(
+        0, L"BUTTON", L"Hapus Komplek", WS_CHILD | BS_OWNERDRAW, 780, 420,
+        180, 38, hWnd, (HMENU)ID_BTN_COMP_DELETE, NULL, NULL);
+    SetWindowSubclass(hwndCompBtnDelete, ButtonSubclassProc, 0, 0);
+    hwndCompCrudCtrls.push_back(hwndCompBtnDelete);
+
+    hwndCompBtnBack = CreateWindowExW(
+        0, L"BUTTON", L"Kembali ke Menu Utama", WS_CHILD | BS_OWNERDRAW, 780,
+        605, 180, 35, hWnd, (HMENU)ID_BTN_COMP_BACK, NULL, NULL);
+    SetWindowSubclass(hwndCompBtnBack, ButtonSubclassProc, 0, 0);
+    hwndCompCrudCtrls.push_back(hwndCompBtnBack);
+
     // Set background colors for specific views using ListView macros
     ListView_SetBkColor(hwndCustChecklist, colorCard);
     ListView_SetTextBkColor(hwndCustChecklist, colorCard);
@@ -555,7 +688,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     // Labels inside panels
     if (hwndCtrl == hwndAddSectionTitle || hwndCtrl == hwndEditSectionTitle ||
         hwndCtrl == hwndCustListTitle || hwndCtrl == hwndSelectLabel ||
-        hwndCtrl == hwndSearchLabel) {
+        hwndCtrl == hwndSearchLabel || hwndCtrl == hwndCompCrudTitle ||
+        hwndCtrl == hwndCompAddSectionTitle || hwndCtrl == hwndCompEditSectionTitle) {
       SetTextColor(hdc, colorText);
       return (INT_PTR)brushBg;
     }
@@ -595,6 +729,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
       else if (lpDrawItem->CtlID == ID_BTN_MENU_CRUD &&
                activePanel == PANEL_CRUD)
         isActive = true;
+      else if (lpDrawItem->CtlID == ID_BTN_MENU_CRUD_KOMPLEK &&
+               activePanel == PANEL_CRUD_KOMPLEK)
+        isActive = true;
 
       bool isHovered = GetPropW(lpDrawItem->hwndItem, L"HOVER") != NULL;
 
@@ -625,7 +762,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
           hBtnBrush = brushSuccess;
         }
         txtColor = RGB(255, 255, 255);
-      } else if (lpDrawItem->CtlID == ID_BTN_CRUD_DELETE) {
+      } else if (lpDrawItem->CtlID == ID_BTN_CRUD_DELETE ||
+                 lpDrawItem->CtlID == ID_BTN_COMP_DELETE) {
         if (needDeleteBrush) {
           DeleteObject(hBtnBrush);
           needDeleteBrush = false;
@@ -641,7 +779,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         }
         txtColor = RGB(255, 255, 255);
       } else if (lpDrawItem->CtlID == ID_BTN_CRUD_ADD ||
-                 lpDrawItem->CtlID == ID_BTN_CRUD_SAVE) {
+                 lpDrawItem->CtlID == ID_BTN_CRUD_SAVE ||
+                 lpDrawItem->CtlID == ID_BTN_COMP_ADD ||
+                 lpDrawItem->CtlID == ID_BTN_COMP_SAVE) {
         if (needDeleteBrush) {
           DeleteObject(hBtnBrush);
           needDeleteBrush = false;
@@ -739,6 +879,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
       break;
     case ID_BTN_MENU_CRUD:
       SwitchPanel(PANEL_CRUD);
+      break;
+    case ID_BTN_MENU_CRUD_KOMPLEK:
+      SwitchPanel(PANEL_CRUD_KOMPLEK);
       break;
     case ID_BTN_MENU_EXIT: {
       int msgBoxID =
@@ -909,10 +1052,149 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
       }
     } break;
 
+    // CRUD Komplek: Pilihan komplek di listbox berubah
+    case IDC_COMP_SELECT: {
+      if (wmEvent == LBN_SELCHANGE) {
+        try {
+          int selIdx = SendMessage(hwndCompEditList, LB_GETCURSEL, 0, 0);
+          if (selIdx != LB_ERR) {
+            wchar_t compW[256];
+            SendMessageW(hwndCompEditList, LB_GETTEXT, selIdx, (LPARAM)compW);
+            wstring wsComp(compW);
+            string compName(wsComp.begin(), wsComp.end());
+
+            string distLainStr = AmbilJarakKomplekLainFormat(compName);
+            wstring wDistLain(distLainStr.begin(), distLainStr.end());
+
+            SetWindowTextW(hwndCompEditEditNama, wsComp.c_str());
+            SetWindowTextW(hwndCompEditEditJarak, wDistLain.c_str());
+          }
+        } catch (...) {
+          MessageBoxW(hWnd, L"Gagal memuat data komplek.", L"Error", MB_ICONERROR);
+        }
+      }
+    } break;
+
+    // CRUD Komplek: Tambah Komplek
+    case ID_BTN_COMP_ADD: {
+      try {
+        wchar_t namaW[128], jarakW[512];
+        GetWindowTextW(hwndCompAddEditNama, namaW, 128);
+        GetWindowTextW(hwndCompAddEditJarak, jarakW, 512);
+
+        wstring wsNama(namaW);
+        wstring wsJarak(jarakW);
+
+        string name(wsNama.begin(), wsNama.end());
+        string otherDists(wsJarak.begin(), wsJarak.end());
+
+        // Trim spasi di awal dan akhir nama
+        while (!name.empty() && name.front() == ' ') name.erase(name.begin());
+        while (!name.empty() && name.back() == ' ') name.pop_back();
+
+        map<string, int> otherDistMap = ParseJarakLain(otherDists);
+
+        // Serahkan semua validasi ke Database, tampilkan pesan error spesifik jika gagal
+        string errMsg = db.TambahKomplek(name, otherDistMap);
+        if (errMsg.empty()) {
+          MessageBoxW(hWnd, L"Komplek berhasil ditambahkan!", L"Sukses", MB_ICONINFORMATION);
+          SetWindowTextW(hwndCompAddEditNama, L"");
+          SetWindowTextW(hwndCompAddEditJarak, L"");
+          ReloadAllUIs();
+        } else {
+          // Konversi pesan error ke wstring untuk ditampilkan
+          wstring wErr(errMsg.begin(), errMsg.end());
+          MessageBoxW(hWnd, wErr.c_str(), L"Input Tidak Valid", MB_ICONWARNING);
+        }
+      } catch (...) {
+        MessageBoxW(hWnd, L"Terjadi kesalahan internal saat menambah komplek.", L"Error", MB_ICONERROR);
+      }
+    } break;
+
+    // CRUD Komplek: Simpan Edit Komplek
+    case ID_BTN_COMP_SAVE: {
+      try {
+        int selIdx = SendMessage(hwndCompEditList, LB_GETCURSEL, 0, 0);
+        if (selIdx == LB_ERR) {
+          MessageBoxW(hWnd, L"Silakan pilih komplek yang ingin diedit di daftar atas!", L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
+
+        wchar_t originalW[256];
+        SendMessageW(hwndCompEditList, LB_GETTEXT, selIdx, (LPARAM)originalW);
+        wstring wsOldName(originalW);
+        string oldName(wsOldName.begin(), wsOldName.end());
+
+        wchar_t newNamaW[128], jarakW[512];
+        GetWindowTextW(hwndCompEditEditNama, newNamaW, 128);
+        GetWindowTextW(hwndCompEditEditJarak, jarakW, 512);
+
+        wstring wsNewName(newNamaW);
+        wstring wsJarak(jarakW);
+
+        string newName(wsNewName.begin(), wsNewName.end());
+        string otherDists(wsJarak.begin(), wsJarak.end());
+
+        // Trim spasi di awal dan akhir nama baru
+        while (!newName.empty() && newName.front() == ' ') newName.erase(newName.begin());
+        while (!newName.empty() && newName.back() == ' ') newName.pop_back();
+
+        map<string, int> otherDistMap = ParseJarakLain(otherDists);
+
+        // Serahkan semua validasi ke Database, tampilkan pesan error spesifik jika gagal
+        string errMsg = db.EditKomplek(oldName, newName, otherDistMap);
+        if (errMsg.empty()) {
+          MessageBoxW(hWnd, L"Informasi komplek berhasil diubah!", L"Sukses", MB_ICONINFORMATION);
+          SetWindowTextW(hwndCompEditEditNama, L"");
+          SetWindowTextW(hwndCompEditEditJarak, L"");
+          ReloadAllUIs();
+        } else {
+          wstring wErr(errMsg.begin(), errMsg.end());
+          MessageBoxW(hWnd, wErr.c_str(), L"Input Tidak Valid", MB_ICONWARNING);
+        }
+      } catch (...) {
+        MessageBoxW(hWnd, L"Terjadi kesalahan internal saat menyimpan perubahan.", L"Error", MB_ICONERROR);
+      }
+    } break;
+
+    // CRUD Komplek: Hapus Komplek
+    case ID_BTN_COMP_DELETE: {
+      try {
+        int selIdx = SendMessage(hwndCompEditList, LB_GETCURSEL, 0, 0);
+        if (selIdx == LB_ERR) {
+          MessageBoxW(hWnd, L"Silakan pilih komplek yang ingin dihapus di daftar atas!", L"Input Invalid", MB_ICONWARNING);
+          break;
+        }
+
+        wchar_t originalW[256];
+        SendMessageW(hwndCompEditList, LB_GETTEXT, selIdx, (LPARAM)originalW);
+        wstring wsName(originalW);
+        string name(wsName.begin(), wsName.end());
+
+        wstring confirmMsg = L"Menghapus komplek \"" + wsName + L"\" juga akan menghapus seluruh data pelanggan di dalamnya! Apakah Anda yakin?";
+        int confirm = MessageBoxW(hWnd, confirmMsg.c_str(), L"Konfirmasi Hapus Komplek", MB_YESNO | MB_ICONWARNING);
+        if (confirm == IDYES) {
+          string errMsg = db.HapusKomplek(name);
+          if (errMsg.empty()) {
+            MessageBoxW(hWnd, L"Komplek berhasil dihapus!", L"Sukses", MB_ICONINFORMATION);
+            SetWindowTextW(hwndCompEditEditNama, L"");
+            SetWindowTextW(hwndCompEditEditJarak, L"");
+            ReloadAllUIs();
+          } else {
+            wstring wErr(errMsg.begin(), errMsg.end());
+            MessageBoxW(hWnd, wErr.c_str(), L"Gagal Hapus", MB_ICONERROR);
+          }
+        }
+      } catch (...) {
+        MessageBoxW(hWnd, L"Terjadi kesalahan internal saat menghapus komplek.", L"Error", MB_ICONERROR);
+      }
+    } break;
+
     // Back buttons
     case ID_BTN_KOMPLEK_BACK:
     case ID_BTN_RUTE_BACK:
     case ID_BTN_CRUD_BACK:
+    case ID_BTN_COMP_BACK:
       SwitchPanel(PANEL_HOME);
       break;
 
@@ -968,15 +1250,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
             SafeStoi(string(wsJarakMasuk.begin(), wsJarakMasuk.end()));
         string otherDists(wsJarakLain.begin(), wsJarakLain.end());
 
-        if (name.empty()) {
-          MessageBoxW(hWnd, L"Nama pelanggan tidak boleh kosong!",
-                      L"Input Invalid", MB_ICONWARNING);
-          break;
-        }
+        // Trim spasi nama
+        while (!name.empty() && name.front() == ' ') name.erase(name.begin());
+        while (!name.empty() && name.back() == ' ') name.pop_back();
 
         map<string, int> otherDistMap = ParseJarakLain(otherDists);
 
-        if (db.TambahPelanggan(name, compName, distMasuk, otherDistMap)) {
+        // Serahkan semua validasi ke Database, tampilkan pesan error spesifik jika gagal
+        string errMsg = db.TambahPelanggan(name, compName, distMasuk, otherDistMap);
+        if (errMsg.empty()) {
           MessageBoxW(hWnd, L"Pelanggan berhasil ditambahkan!", L"Sukses",
                       MB_ICONINFORMATION);
           SetWindowTextW(hwndAddEditNama, L"");
@@ -984,11 +1266,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
           SetWindowTextW(hwndAddEditJarakLain, L"");
           ReloadAllUIs();
         } else {
-          MessageBoxW(
-              hWnd,
-              L"Gagal menambahkan pelanggan. Nama mungkin duplikat atau "
-              L"tidak valid.",
-              L"Error", MB_ICONERROR);
+          wstring wErr(errMsg.begin(), errMsg.end());
+          MessageBoxW(hWnd, wErr.c_str(), L"Input Tidak Valid", MB_ICONWARNING);
         }
       } catch (...) {
         MessageBoxW(hWnd,
@@ -1041,16 +1320,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
             SafeStoi(string(wsJarakMasuk.begin(), wsJarakMasuk.end()));
         string otherDists(wsJarakLain.begin(), wsJarakLain.end());
 
-        if (newName.empty()) {
-          MessageBoxW(hWnd, L"Nama pelanggan baru tidak boleh kosong!",
-                      L"Input Invalid", MB_ICONWARNING);
-          break;
-        }
+        // Trim spasi nama baru
+        while (!newName.empty() && newName.front() == ' ') newName.erase(newName.begin());
+        while (!newName.empty() && newName.back() == ' ') newName.pop_back();
 
         map<string, int> otherDistMap = ParseJarakLain(otherDists);
 
-        if (db.EditPelanggan(oldName, newName, compName, distMasuk,
-                             otherDistMap)) {
+        // Serahkan semua validasi ke Database, tampilkan pesan error spesifik jika gagal
+        string errMsg = db.EditPelanggan(oldName, newName, compName, distMasuk, otherDistMap);
+        if (errMsg.empty()) {
           MessageBoxW(hWnd, L"Informasi pelanggan berhasil diubah!", L"Sukses",
                       MB_ICONINFORMATION);
           SetWindowTextW(hwndEditEditNama, L"");
@@ -1058,10 +1336,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
           SetWindowTextW(hwndEditEditJarakLain, L"");
           ReloadAllUIs();
         } else {
-          MessageBoxW(hWnd,
-                      L"Gagal menyimpan perubahan. Nama baru mungkin duplikat "
-                      L"atau tidak valid.",
-                      L"Error", MB_ICONERROR);
+          wstring wErr(errMsg.begin(), errMsg.end());
+          MessageBoxW(hWnd, wErr.c_str(), L"Input Tidak Valid", MB_ICONWARNING);
         }
       } catch (...) {
         MessageBoxW(hWnd,
@@ -1106,7 +1382,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         int confirm = MessageBoxW(hWnd, confirmMsg.c_str(), L"Konfirmasi Hapus",
                                   MB_YESNO | MB_ICONWARNING);
         if (confirm == IDYES) {
-          if (db.HapusPelanggan(name, compName)) {
+          string errMsg = db.HapusPelanggan(name, compName);
+          if (errMsg.empty()) {
             MessageBoxW(hWnd, L"Pelanggan berhasil dihapus!", L"Sukses",
                         MB_ICONINFORMATION);
             SetWindowTextW(hwndEditEditNama, L"");
@@ -1114,8 +1391,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
             SetWindowTextW(hwndEditEditJarakLain, L"");
             ReloadAllUIs();
           } else {
-            MessageBoxW(hWnd, L"Gagal menghapus pelanggan.", L"Error",
-                        MB_ICONERROR);
+            wstring wErr(errMsg.begin(), errMsg.end());
+            MessageBoxW(hWnd, wErr.c_str(), L"Gagal Hapus", MB_ICONERROR);
           }
         }
       } catch (...) {
@@ -1133,6 +1410,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     RemoveWindowSubclass(hwndMenuKomplek, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndMenuRute, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndMenuCrud, ButtonSubclassProc, 0);
+    RemoveWindowSubclass(hwndMenuCrudKomplek, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndMenuExit, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndBtnSelectAll, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndBtnReset, ButtonSubclassProc, 0);
@@ -1143,6 +1421,10 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
     RemoveWindowSubclass(hwndBtnKomplekBack, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndBtnRuteBack, ButtonSubclassProc, 0);
     RemoveWindowSubclass(hwndBtnCrudBack, ButtonSubclassProc, 0);
+    RemoveWindowSubclass(hwndCompBtnAdd, ButtonSubclassProc, 0);
+    RemoveWindowSubclass(hwndCompBtnSave, ButtonSubclassProc, 0);
+    RemoveWindowSubclass(hwndCompBtnDelete, ButtonSubclassProc, 0);
+    RemoveWindowSubclass(hwndCompBtnBack, ButtonSubclassProc, 0);
 
     PostQuitMessage(0);
     break;
@@ -1153,11 +1435,13 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
   return 0;
 }
 
-// Switch between content panels
+// Fungsi untuk berpindah (switch) antar panel konten di GUI
+// Cara kerjanya adalah menyembunyikan semua kontrol dari panel lain terlebih dahulu,
+// kemudian menampilkan semua kontrol yang terdaftar pada panel aktif yang dipilih.
 void SwitchPanel(ActivePanel panel) {
   activePanel = panel;
 
-  // Hide all first
+  // Sembunyikan seluruh kontrol di semua panel terlebih dahulu
   for (HWND hwnd : hwndHomeCtrls)
     ShowWindow(hwnd, SW_HIDE);
   for (HWND hwnd : hwndKomplekCtrls)
@@ -1166,8 +1450,10 @@ void SwitchPanel(ActivePanel panel) {
     ShowWindow(hwnd, SW_HIDE);
   for (HWND hwnd : hwndCrudCtrls)
     ShowWindow(hwnd, SW_HIDE);
+  for (HWND hwnd : hwndCompCrudCtrls)
+    ShowWindow(hwnd, SW_HIDE);
 
-  // Show active
+  // Tampilkan kontrol yang sesuai dengan panel yang saat ini aktif
   switch (panel) {
   case PANEL_HOME:
     for (HWND hwnd : hwndHomeCtrls)
@@ -1185,15 +1471,19 @@ void SwitchPanel(ActivePanel panel) {
     for (HWND hwnd : hwndCrudCtrls)
       ShowWindow(hwnd, SW_SHOW);
     break;
+  case PANEL_CRUD_KOMPLEK:
+    for (HWND hwnd : hwndCompCrudCtrls)
+      ShowWindow(hwnd, SW_SHOW);
+    break;
   }
 
-  // Repaint window
+  // Memicu gambar ulang window utama (repaint) agar tampilan bersih
   InvalidateRect(hwndMain, NULL, TRUE);
 }
 
-// Reload lists and labels after data modification
+// Memuat ulang (reload) seluruh daftar data dan label pada antarmuka GUI setelah terjadi perubahan data
 void ReloadAllUIs() {
-  // 1. Dashboard counts
+  // 1. Memperbarui jumlah total komplek dan pelanggan pada kartu dashboard di Panel Home
   wstring compText =
       L"Total Komplek\n" + to_wstring_custom(db.KomplekList.size());
   SetWindowTextW(hwndHomeCard1, compText.c_str());
@@ -1202,7 +1492,7 @@ void ReloadAllUIs() {
       L"Total Pelanggan\n" + to_wstring_custom(db.PelangganList.size());
   SetWindowTextW(hwndHomeCard2, custText.c_str());
 
-  // 2. Complex List (Informasi Komplek)
+  // 2. Memperbarui ListBox Daftar Komplek pada Panel Informasi Komplek
   SendMessage(hwndKomplekList, LB_RESETCONTENT, 0, 0);
   for (const auto &comp : db.KomplekList) {
     wstring compW(comp.begin(), comp.end());
@@ -1211,7 +1501,7 @@ void ReloadAllUIs() {
   SendMessage(hwndCustDetailList, LB_RESETCONTENT, 0, 0);
   SetWindowTextW(hwndSearchEdit, L"");
 
-  // 3. Checklist ListView (Route Planner)
+  // 3. Memperbarui ListView Checklist Pelanggan pada Panel Perencanaan Rute
   ListView_DeleteAllItems(hwndCustChecklist);
   int lvIdx = 0;
   for (const auto &p : db.PelangganList) {
@@ -1229,16 +1519,16 @@ void ReloadAllUIs() {
     lvIdx++;
   }
 
-  // 4. ComboBox Complexes (CRUD Add)
+  // 4. Memperbarui ComboBox Pilihan Komplek pada Panel Tambah Pelanggan (CRUD Pelanggan)
   SendMessage(hwndAddComboKomplek, CB_RESETCONTENT, 0, 0);
   for (const auto &comp : db.KomplekList) {
     if (comp == "Depot")
-      continue; // Tidak bisa tambah pelanggan ke depot langsung
+      continue; // Tidak diperbolehkan menambahkan pelanggan ke komplek Depot secara langsung
     wstring compW(comp.begin(), comp.end());
     SendMessageW(hwndAddComboKomplek, CB_ADDSTRING, 0, (LPARAM)compW.c_str());
   }
 
-  // 5. ComboBox Complexes (CRUD Edit)
+  // 5. Memperbarui ComboBox Pilihan Komplek pada Panel Edit Pelanggan (CRUD Pelanggan)
   SendMessage(hwndEditComboKomplek, CB_RESETCONTENT, 0, 0);
   for (const auto &comp : db.KomplekList) {
     if (comp == "Depot")
@@ -1247,8 +1537,17 @@ void ReloadAllUIs() {
     SendMessageW(hwndEditComboKomplek, CB_ADDSTRING, 0, (LPARAM)compW.c_str());
   }
 
-  // 6. Reset ListBox Customers (CRUD Edit/Delete)
+  // 6. Mereset ListBox Pelanggan pada Panel Edit/Hapus Pelanggan (CRUD Pelanggan)
   SendMessage(hwndEditListPelanggan, LB_RESETCONTENT, 0, 0);
+
+  // 7. Memperbarui ListBox Komplek pada Panel Kelola Komplek (CRUD Komplek)
+  SendMessage(hwndCompEditList, LB_RESETCONTENT, 0, 0);
+  for (const auto &comp : db.KomplekList) {
+    if (comp == "Depot")
+      continue; // Komplek Depot dilindungi, tidak dapat diedit atau dihapus
+    wstring compW(comp.begin(), comp.end());
+    SendMessageW(hwndCompEditList, LB_ADDSTRING, 0, (LPARAM)compW.c_str());
+  }
 }
 
 // Run routing logic and output results
@@ -1419,6 +1718,22 @@ string AmbilJarakLainFormat(const string &nama, const string &komplek) {
           result += ", ";
         result += jp.Dari + ":" + to_string(jp.Jarak);
       }
+    }
+  }
+  return result;
+}
+
+string AmbilJarakKomplekLainFormat(const string &nama) {
+  string result = "";
+  for (const auto &jk : db.JarakKomplekList) {
+    if (jk.Dari == nama) {
+      if (!result.empty())
+        result += ", ";
+      result += jk.Ke + ":" + to_string(jk.Jarak);
+    } else if (jk.Ke == nama) {
+      if (!result.empty())
+        result += ", ";
+      result += jk.Dari + ":" + to_string(jk.Jarak);
     }
   }
   return result;

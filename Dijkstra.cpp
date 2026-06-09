@@ -3,26 +3,26 @@
 
 using namespace std;
 
-//Fungsi utama Dijkstra
-// Cara kerjanya:
-// 1.Semua jarak dimulai dari INF (blm diketahui)
-// 2.Jarak start ke start = 0
-// 3.Setiap langkah: pilih node yang blm dikunjungi dengan jarak terkecil
-// 4.Update jarak tetangganya jika lewat node ini lebih dekat
-// 5.Ulangi sampai semua node dikunjungi
-
+// Fungsi Utama Dijkstra
+// Algoritma ini mencari lintasan terpendek dari satu titik awal (Start) ke seluruh node lainnya di dalam Graf.
+// Cara kerja algoritma:
+// 1. Inisialisasi jarak semua node dari node awal dengan nilai Tak Hingga (INF).
+// 2. Jarak dari node awal ke dirinya sendiri diset = 0.
+// 3. Pada setiap langkah, cari node dengan nilai jarak terkecil yang belum pernah dikunjungi.
+// 4. Perbarui jarak ke seluruh node tetangganya yang belum dikunjungi jika melewati node terpilih ini menghasilkan jarak yang lebih pendek.
+// 5. Ulangi proses ini hingga semua node telah dikunjungi.
 vector<int> Dijkstra(
     const vector<vector<int>>& Graf, int Start) {
-        int JumlahNode = Graf.size(); //Jumlah nodenya
+        int JumlahNode = Graf.size(); // Menyimpan jumlah simpul/node pada graf
 
-        vector<int> Jarak(JumlahNode, INF); //Inisialisasi jarak
-        vector<int> Prev(JumlahNode, -1); //Untuk rekonstruksi jalur
-        vector<bool> Dikunjungi(JumlahNode, false); //Tandai node yang sudah dikunjungi atau blm
+        vector<int> Jarak(JumlahNode, INF); // Inisialisasi jarak ke semua node sebagai INF
+        vector<int> Prev(JumlahNode, -1); // Array penyimpan node asal/sebelumnya untuk melacak jalur
+        vector<bool> Dikunjungi(JumlahNode, false); // Array penanda apakah suatu node sudah diproses
 
-        Jarak[Start] = 0; //Jarak ke diri sendiri = 0
+        Jarak[Start] = 0; // Jarak ke node asal diatur ke 0
         for (int Langkah = 0; Langkah < JumlahNode; Langkah++) {
 
-            //Cari node dengan jarak terkecil yang blm dikunjungi
+            // Langkah A: Mencari node dengan jarak terkecil yang belum dikunjungi
             int NodeTerdekat = -1;
             for (int i = 0; i < JumlahNode; i++) {
                 if (!Dikunjungi[i]) {
@@ -32,53 +32,51 @@ vector<int> Dijkstra(
                 }
             }
 
-// Kalau jarak terkecil masih INF, berarti node sisanya
-// Tidak terhubung sama sekali, ya berhenti aja
-            if (Jarak[NodeTerdekat] == INF) break;
+            // Jika node terdekat memiliki jarak INF, berarti node-node yang tersisa tidak terhubung
+            if (NodeTerdekat == -1 || Jarak[NodeTerdekat] == INF) break;
 
-            Dikunjungi[NodeTerdekat] = true; //Tandai node ini sudah dikunjungi
+            Dikunjungi[NodeTerdekat] = true; // Tandai node ini telah selesai dikunjungi
 
-            //Update jarak tetangganya
+            // Langkah B: Perbarui (rileksasi) jarak ke semua tetangga dari node terdekat
             for (int Tetangga = 0; Tetangga < JumlahNode; Tetangga++) {
-                //Kalau ada jalan dari NodeTerdekat ke Tetangga (bukan INF)
+                // Periksa apakah ada jalur penghubung langsung (bukan INF) dan tetangga belum dikunjungi
                 if (Graf[NodeTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
                     int JarakBaru = Jarak[NodeTerdekat] + Graf[NodeTerdekat][Tetangga];
 
-                    //Kalau lewat NodeTerdekat lbh dekat, update jaraknya
+                    // Jika jalur baru lebih pendek, update nilai jarak dan catat pendahulunya
                     if (JarakBaru < Jarak[Tetangga]) {
                         Jarak[Tetangga] = JarakBaru;
-                        Prev[Tetangga] = NodeTerdekat; //Simpan jalur untuk rekonstruksi
+                        Prev[Tetangga] = NodeTerdekat; 
                     }
                 }
             }
     }
-    //Prev disimpan sebagai variabel globall sementara
-    // (atau bisa dijadikan parameter output juga kalau mau lebih rapi)
     return Jarak;
-    }
+}
 
-//Rekonstruksi jalur: dari mana aja lewatnya
-// Setelah Dijkstra jalan, kita tau jarak terpendek
-// Tapi kita juga pengen tau rutenya (lewat mana aja)
-// Fungsi ini mundur dari tujuan ke start make array Prev yang disimpan selama Dijkstra
-
+// Fungsi Rekonstruksi Jalur
+// Setelah algoritma Dijkstra berjalan, kita mendapatkan informasi jarak terpendek beserta predecessors.
+// Fungsi ini berjalan mundur mulai dari node Tujuan hingga kembali ke node Awal menggunakan array Prev,
+// lalu membalikkan urutan array tersebut agar kita mendapatkan urutan perjalanan yang benar (Maju).
 vector<int> RekonstruksiJalur(
     const vector<int>& Prev, int Tujuan) {
         vector<int> Jalur;
         int Node = Tujuan;
 
+        // Berjalan mundur sampai menemukan node awal (-1)
         while (Node != -1) {
             Jalur.push_back(Node);
             Node = Prev[Node];
         }
 
-        //Jalur Rekonstruksi dari belakang, jadi dibalik dulu
+        // Jalur didapatkan secara terbalik (Tujuan -> Awal), sehingga perlu dibalik
         reverse(Jalur.begin(), Jalur.end());
         return Jalur;
     }
 
-//Dijkstra Makro: antar blok
-// Fungsinya mirip Dijkstra biasa, tapi kita juga print nama bloknya
+// Fungsi Dijkstra Makro
+// Fungsi ini menjalankan algoritma Dijkstra untuk tingkat Makro (antar blok/komplek) 
+// dan mencetak rute perjalanan serta total jaraknya langsung ke konsol.
 void DijkstraMakro(
     const vector<vector<int>>& GrafMakro,
     const vector<string>& NamaBlok,
@@ -87,7 +85,7 @@ void DijkstraMakro(
 ) {
  int JumlahBlok = GrafMakro.size();
 
- //Jalankan Dijkstra dari depot (start blok)
+ // Inisialisasi struktur data Dijkstra
  vector<int> Jarak(JumlahBlok, INF);
  vector<int> Prev(JumlahBlok, -1);
  vector<bool> Dikunjungi(JumlahBlok, false);
@@ -101,21 +99,21 @@ void DijkstraMakro(
             BlokTerdekat = i;
         }
     }
-        if (Jarak[BlokTerdekat] == INF) break;
-        Dikunjungi[BlokTerdekat] = true;
+    if (BlokTerdekat == -1 || Jarak[BlokTerdekat] == INF) break;
+    Dikunjungi[BlokTerdekat] = true;
 
-        for (int Tetangga = 0; Tetangga < JumlahBlok; Tetangga++) {
-            if (GrafMakro[BlokTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
-                int JarakBaru = Jarak[BlokTerdekat] + GrafMakro[BlokTerdekat][Tetangga];
-                if (JarakBaru < Jarak[Tetangga]) {
-                    Jarak[Tetangga] = JarakBaru;
-                    Prev[Tetangga] = BlokTerdekat;
-                }
+    for (int Tetangga = 0; Tetangga < JumlahBlok; Tetangga++) {
+        if (GrafMakro[BlokTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
+            int JarakBaru = Jarak[BlokTerdekat] + GrafMakro[BlokTerdekat][Tetangga];
+            if (JarakBaru < Jarak[Tetangga]) {
+                Jarak[Tetangga] = JarakBaru;
+                Prev[Tetangga] = BlokTerdekat;
             }
         }
     }
+ }
 
-// Tampilkan rute ke setiap Blok Tujuannya
+  // Tampilkan hasil pencarian rute rincian ke layar
   cout << "\n Rute Antar Blok (Makro)" << endl;
   cout << "Titik Awal: " << NamaBlok[StartBlok] << endl;
 
@@ -126,25 +124,27 @@ void DijkstraMakro(
         continue;
     }
 
-   // Rekonstruksi Jalur
-   vector<int> Jalur;
-   int Node = Tujuan;
-   while (Node != -1) {
-    Jalur.push_back(Node);
-    Node = Prev[Node];
-   }
-   reverse(Jalur.begin(), Jalur.end());
+    // Melakukan rekonstruksi urutan perjalanan dari Depot ke Komplek Tujuan
+    vector<int> Jalur;
+    int Node = Tujuan;
+    while (Node != -1) {
+        Jalur.push_back(Node);
+        Node = Prev[Node];
+    }
+    reverse(Jalur.begin(), Jalur.end());
 
     cout << "Rute: ";
     for (int i = 0; i < Jalur.size(); i++) {
         cout << NamaBlok[Jalur[i]];
         if (i < Jalur.size() - 1) cout << " -> ";
     }
-    cout << "\n Total Jarak: " << Jarak[Tujuan] << " meter" <<endl;
+    cout << "\n Total Jarak: " << Jarak[Tujuan] << " meter" << endl;
   }
 }
 
-// Dijkstra Mikro: antar pelanggan dalam satu blok
+// Fungsi Dijkstra Mikro
+// Menghitung rute distribusi air di dalam satu komplek perumahan tertentu (antar pelanggan)
+// dan mencetak rute mikro serta total jaraknya langsung ke konsol.
 void DijkstraMikro(
     const vector<vector<int>>& GrafMikro,
     const vector<string>& NamaPelanggan,
@@ -166,21 +166,21 @@ void DijkstraMikro(
                 PelangganTerdekat = i;
             }
         }
-            if (Jarak[PelangganTerdekat] == INF) break;
-            Dikunjungi[PelangganTerdekat] = true;
+        if (PelangganTerdekat == -1 || Jarak[PelangganTerdekat] == INF) break;
+        Dikunjungi[PelangganTerdekat] = true;
 
-            for (int Tetangga = 0; Tetangga < JumlahNode; Tetangga++) {
-                if (GrafMikro[PelangganTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
-                    int JarakBaru = Jarak[PelangganTerdekat] + GrafMikro[PelangganTerdekat][Tetangga];
-                    if (JarakBaru < Jarak[Tetangga]) {
-                        Jarak[Tetangga] = JarakBaru;
-                        Prev[Tetangga] = PelangganTerdekat;
-                     }
+        for (int Tetangga = 0; Tetangga < JumlahNode; Tetangga++) {
+            if (GrafMikro[PelangganTerdekat][Tetangga] != INF && !Dikunjungi[Tetangga]) {
+                int JarakBaru = Jarak[PelangganTerdekat] + GrafMikro[PelangganTerdekat][Tetangga];
+                if (JarakBaru < Jarak[Tetangga]) {
+                    Jarak[Tetangga] = JarakBaru;
+                    Prev[Tetangga] = PelangganTerdekat;
                  }
              }
-        }
+         }
+    }
 
-    // Tampilkan rute ke setiap Pelanggan Tujuannya
+    // Tampilkan rute ke setiap Pelanggan Tujuannya di konsol
     cout << "\n Rute Antar Dalam Blok (Mikro)" << endl;
     cout << "Titik Awal: " << NamaPelanggan[StartPelanggan] << endl;
 
@@ -198,17 +198,17 @@ void DijkstraMikro(
             Node = Prev[Node];
         }
     
-    reverse(Jalur.begin(), Jalur.end());
-    cout << "Rute: ";
-    for (int i = 0; i < Jalur.size(); i++) {
-        cout << NamaPelanggan[Jalur[i]];
-        if (i < Jalur.size() - 1) cout << " -> ";
-    }
-    cout << "\n Total Jarak: " << Jarak[Tujuan] << " meter" << endl;
+        reverse(Jalur.begin(), Jalur.end());
+        cout << "Rute: ";
+        for (int i = 0; i < Jalur.size(); i++) {
+            cout << NamaPelanggan[Jalur[i]];
+            if (i < Jalur.size() - 1) cout << " -> ";
+        }
+        cout << "\n Total Jarak: " << Jarak[Tujuan] << " meter" << endl;
     }
 }
 
-// Helper untuk menjalankan Dijkstra dan mengembalikan Jarak serta Prev
+// Fungsi pembantu internal untuk menjalankan Dijkstra dan mengembalikan hasil jarak beserta silsilah jalur (Prev)
 pair<vector<int>, vector<int>> DijkstraDetail(const vector<vector<int>>& Graf, int Start) {
     int N = Graf.size();
     vector<int> Jarak(N, INF);
@@ -243,7 +243,9 @@ pair<vector<int>, vector<int>> DijkstraDetail(const vector<vector<int>>& Graf, i
     return {Jarak, Prev};
 }
 
-// Algoritma Nearest-Neighbor TSP untuk Makro
+// Algoritma Heuristik Nearest-Neighbor TSP untuk tingkat Makro (Antar Komplek)
+// Membantu merencanakan urutan kunjungan komplek terdekat secara berurutan:
+// Depot -> Komplek Terdekat 1 -> Komplek Terdekat 2 -> ... -> Kembali ke Depot
 RuteHasil HitungRuteMakro(
     const vector<vector<int>>& GrafMakro,
     int StartBlok,
@@ -262,6 +264,7 @@ RuteHasil HitungRuteMakro(
     Hasil.RuteNode.push_back(StartBlok);
     
     while (!BelumDikunjungi.empty()) {
+        // Cari jalur terpendek dari simpul aktif ke seluruh node lain menggunakan Dijkstra
         auto detail = DijkstraDetail(GrafMakro, NodeSekarang);
         const vector<int>& Jarak = detail.first;
         const vector<int>& Prev = detail.second;
@@ -269,7 +272,8 @@ RuteHasil HitungRuteMakro(
         int IndeksTerdekat = -1;
         int JarakTerdekat = INF;
         
-        for (int i = 0; i < BelumDikunjungi.size(); i++) {
+        // Cari dari daftar target kunjungan mana yang memiliki jarak paling dekat dari node sekarang
+        for (size_t i = 0; i < BelumDikunjungi.size(); i++) {
             int Target = BelumDikunjungi[i];
             if (Jarak[Target] < JarakTerdekat) {
                 JarakTerdekat = Jarak[Target];
@@ -277,12 +281,12 @@ RuteHasil HitungRuteMakro(
             }
         }
         
-        // Jika tidak ada target yang bisa dijangkau
+        // Jika sisa target tidak dapat dijangkau dari node sekarang, hentikan pencarian
         if (IndeksTerdekat == -1 || JarakTerdekat == INF) break;
         
         int TargetTerdekat = BelumDikunjungi[IndeksTerdekat];
         
-        // Rekonstruksi Jalur segmen ini
+        // Melakukan rekonstruksi rute segmen perjalanan aktif
         vector<int> SegmenJalur;
         int TempNode = TargetTerdekat;
         while (TempNode != -1) {
@@ -291,15 +295,17 @@ RuteHasil HitungRuteMakro(
         }
         reverse(SegmenJalur.begin(), SegmenJalur.end());
         
+        // Simpan informasi hasil rute ke struktur output
         Hasil.DetailJalur.push_back(SegmenJalur);
         Hasil.TotalJarak += JarakTerdekat;
         Hasil.RuteNode.push_back(TargetTerdekat);
         
+        // Berpindah ke node tujuan terdekat tersebut
         NodeSekarang = TargetTerdekat;
         BelumDikunjungi.erase(BelumDikunjungi.begin() + IndeksTerdekat);
     }
     
-    // Kembali ke Depot (StartBlok)
+    // Langkah Akhir: Kembali lagi ke Depot (StartBlok)
     if (NodeSekarang != StartBlok) {
         auto detail = DijkstraDetail(GrafMakro, NodeSekarang);
         const vector<int>& Jarak = detail.first;
@@ -322,7 +328,9 @@ RuteHasil HitungRuteMakro(
     return Hasil;
 }
 
-// Algoritma Nearest-Neighbor TSP untuk Mikro
+// Algoritma Heuristik Nearest-Neighbor TSP untuk tingkat Mikro (Antar Pelanggan dalam Komplek)
+// Membantu merencanakan urutan pengiriman air galon ke rumah-rumah pelanggan di dalam satu blok perumahan:
+// Masuk Komplek -> Pelanggan Terdekat 1 -> Pelanggan Terdekat 2 -> ... -> Kembali ke Pintu Masuk
 RuteHasil HitungRuteMikro(
     const vector<vector<int>>& GrafMikro,
     int StartPelanggan,
@@ -341,6 +349,7 @@ RuteHasil HitungRuteMikro(
     Hasil.RuteNode.push_back(StartPelanggan);
     
     while (!BelumDikunjungi.empty()) {
+        // Cari jalur terpendek dari simpul aktif ke seluruh pelanggan lain
         auto detail = DijkstraDetail(GrafMikro, NodeSekarang);
         const vector<int>& Jarak = detail.first;
         const vector<int>& Prev = detail.second;
@@ -348,7 +357,8 @@ RuteHasil HitungRuteMikro(
         int IndeksTerdekat = -1;
         int JarakTerdekat = INF;
         
-        for (int i = 0; i < BelumDikunjungi.size(); i++) {
+        // Cari pelanggan tujuan berikutnya yang terdekat dari posisi kurir saat ini
+        for (size_t i = 0; i < BelumDikunjungi.size(); i++) {
             int Target = BelumDikunjungi[i];
             if (Jarak[Target] < JarakTerdekat) {
                 JarakTerdekat = Jarak[Target];
@@ -360,6 +370,7 @@ RuteHasil HitungRuteMikro(
         
         int TargetTerdekat = BelumDikunjungi[IndeksTerdekat];
         
+        // Rekonstruksi segmen perjalanan mikro
         vector<int> SegmenJalur;
         int TempNode = TargetTerdekat;
         while (TempNode != -1) {
@@ -376,7 +387,7 @@ RuteHasil HitungRuteMikro(
         BelumDikunjungi.erase(BelumDikunjungi.begin() + IndeksTerdekat);
     }
     
-    // Kembali ke Masuk Blok (StartPelanggan)
+    // Langkah Akhir: Kurir kembali ke pintu masuk gerbang utama komplek (StartPelanggan)
     if (NodeSekarang != StartPelanggan) {
         auto detail = DijkstraDetail(GrafMikro, NodeSekarang);
         const vector<int>& Jarak = detail.first;
